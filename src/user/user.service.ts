@@ -26,11 +26,6 @@ export class UserService {
       if (existingUser) {
         throw new ConflictException('Use another email');
       }
-      if (!user.password || typeof user.password !== 'string') {
-        throw new InternalServerErrorException(
-          'Password is required and must be a string',
-        );
-      }
 
       const hashedPassword = await bcrypt.hash(user.password, 10);
       const newUser = { ...user, password: hashedPassword };
@@ -49,11 +44,7 @@ export class UserService {
       if (!existingUser) {
         throw new NotFoundException('Use valid email');
       }
-      if (!user.password || typeof user.password !== 'string') {
-        throw new InternalServerErrorException(
-          'Password is required and must be a string',
-        );
-      }
+
       const isPasswordValid = await bcrypt.compare(
         user.password,
         existingUser.password,
