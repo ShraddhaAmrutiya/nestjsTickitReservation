@@ -1,17 +1,23 @@
-import { Schema, Prop, SchemaFactory } from '@nestjs/mongoose';
+import {
+  Prop,
+  SchemaFactory,
+  Schema as MongooseSchema,
+} from '@nestjs/mongoose';
+import { Document, Types } from 'mongoose';
 
-import { bus } from 'src/bus/bus.schema';
-import { Routs } from 'src/BusRoutes/Route.schema';
-import { Types } from 'mongoose';
+export type ScheduleDocument = Schedule & Document;
 
-Schema();
+@MongooseSchema()
 export class Schedule {
-  @Prop({ type: Types.ObjectId, ref: typeof bus, require: true })
+  @Prop({ type: Types.ObjectId, ref: 'bus', required: true })
   busId: Types.ObjectId;
-  @Prop({ type: Types.ObjectId, ref: typeof Routs, require: true })
+
+  @Prop({ type: Types.ObjectId, ref: 'Routs', required: true })
   routId: Types.ObjectId;
+
   @Prop()
-  depatureTime: Date;
+  departureTime: Date;
+
   @Prop()
   arrivalTime: Date;
 }

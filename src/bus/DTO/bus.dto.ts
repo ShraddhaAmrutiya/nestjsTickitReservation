@@ -54,15 +54,19 @@ export class createBusDto {
   @IsNotEmpty()
   @IsNumber()
   totalSeats: number;
-  @ApiProperty({
-    type: [Seat],
-    description: 'Array of seat objects (auto-generated)',
-    required: false,
-  })
+  // @ApiProperty({
+  //   type: [Seat],
+  //   description: 'Array of seat objects (auto-generated)',
+  //   required: false,
+  // })
   @IsOptional()
   @ValidateNested({ each: true })
   @Type(() => Seat)
   seats?: Seat[];
+
+  @IsOptional()
+  @IsNumber()
+  availableSeats?: number;
 }
 
 export interface BusSummary {

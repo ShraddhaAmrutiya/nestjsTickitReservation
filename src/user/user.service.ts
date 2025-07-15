@@ -22,7 +22,9 @@ export class UserService {
 
   async create(user: CreateUserDTO) {
     try {
-      const existingUser = await this.userModel.findOne({ email: user.email });
+      const existingUser = await this.userModel.findOne({
+        $or: [{ email: user.email }, { userName: user.userName }],
+      });
       if (existingUser) {
         throw new ConflictException('Use another email');
       }
@@ -59,6 +61,8 @@ export class UserService {
         token: token,
       };
     } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      if (error instanceof UnauthorizedException) throw error;
       if (error instanceof ConflictException) throw error;
       throw new InternalServerErrorException('Failed to login.');
     }

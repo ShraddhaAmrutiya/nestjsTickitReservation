@@ -10,9 +10,13 @@ import { Model } from 'mongoose';
 import { bus } from './bus.schema';
 import { InjectModel } from '@nestjs/mongoose';
 import { BusSummary } from './DTO/bus.dto';
+import { Schedule } from 'src/schedule/schedule.schema';
 @Injectable()
 export class BusService {
-  constructor(@InjectModel(bus.name) private busModel: Model<bus>) {}
+  constructor(
+    @InjectModel(bus.name) private busModel: Model<bus>,
+    @InjectModel(Schedule.name) private scheduleModel: Model<Schedule>,
+  ) {}
   async create(bus: createBusDto) {
     try {
       const existingBus = await this.busModel.findOne({
@@ -28,9 +32,15 @@ export class BusService {
         available: true,
       }));
 
-      const newBus = new this.busModel({ ...bus, seats });
+      const newBus = new this.busModel({
+        ...bus,
+        seats,
+        availabeSeats: bus.totalSeats,
+      });
       return await newBus.save();
     } catch (error) {
+      console.log(error);
+
       if (error instanceof ConflictException) throw error;
       throw new InternalServerErrorException('Failed to create bus');
     }
@@ -92,6 +102,8 @@ export class BusService {
       if (!bus) {
         throw new NotFoundException('Bus not found');
       }
+      await this.scheduleModel.deleteMany({ busId: id }).exec();
+
       return { message: `bus deleted successfully`, bus: bus.busName };
     } catch (error: any) {
       if (error instanceof NotFoundException) throw error;

@@ -7,6 +7,7 @@ import { ScheduleModule } from './schedule/schedule.module';
 import { UserModule } from './user/user.module';
 import { BookingModule } from './booking/booking.module';
 import { MongooseModule } from '@nestjs/mongoose';
+import { StopModule } from './stop/stop.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { MongooseModule } from '@nestjs/mongoose';
     UserModule,
     BookingModule,
     MongooseModule.forRoot(`mongodb://localhost:27017/ticket-reservation`),
+    StopModule,
   ],
   controllers: [AppController],
   providers: [AppService],

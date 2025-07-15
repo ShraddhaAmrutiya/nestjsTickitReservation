@@ -13,7 +13,10 @@ export class bus {
 
   @Prop({ required: true })
   busType: string;
-
+  @Prop()
+  totalSeats: number;
+  @Prop()
+  availabeSeats: number;
   @Prop({
     type: [
       {
@@ -24,8 +27,6 @@ export class bus {
     default: [],
   })
   seats: { seatNumber: number; available: boolean }[];
-  @Prop()
-  totalSeats: number;
 }
 
 export const BusSchema = SchemaFactory.createForClass(bus);
