@@ -1,31 +1,3 @@
-// import { NestFactory } from '@nestjs/core';
-// import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-// import { AppModule } from './app.module';
-// import { ValidationPipe } from '@nestjs/common';
-
-// async function bootstrap() {
-//   const app = await NestFactory.create(AppModule);
-//   //global validation
-//   app.useGlobalPipes(
-//     new ValidationPipe({
-//       whitelist: true,
-//       forbidNonWhitelisted: true,
-//       transform: true,
-//     }),
-//   );
-//   //swagger setup
-//   const config = new DocumentBuilder()
-//     .setTitle('Bus tickit reservation')
-//     .setDescription('The bus API description')
-//     .setVersion('1.0')
-//     .build();
-//   const documentFactory = () => SwaggerModule.createDocument(app, config);
-//   SwaggerModule.setup('api', app, documentFactory);
-
-//   await app.listen(process.env.PORT ?? 3000);
-// }
-// void bootstrap();
-
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
@@ -66,9 +38,9 @@ async function bootstrap() {
 
   // Start microservice and main app
   await app.startAllMicroservices();
-  console.log('✅ Mail microservice is listening...');
+  console.log(' Mail microservice is listening...');
 
   await app.listen(3000);
-  console.log('🚀 HTTP server is running on http://localhost:3000');
+  console.log(' HTTP server is running on http://localhost:3000');
 }
 void bootstrap();

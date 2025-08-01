@@ -1,4 +1,4 @@
-import { ApiProperty, PartialType } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 import {
   IsDateString,
   IsEnum,
@@ -36,5 +36,28 @@ export class BookingDto {
   @IsString()
   seatNumber: string;
 }
+export class UpdateBookingStatusDto {
+  @ApiProperty({
+    example: '688c8ae3d2d2f62cda453a17',
+    description: 'User Booking Group ID',
+  })
+  @IsNotEmpty()
+  @IsMongoId()
+  userBookingId: string;
 
-export class UpdateBookingDto extends PartialType(BookingDto) {}
+  @ApiProperty({
+    example: '688c8ae3d2d2f62cda453a18',
+    description: 'Single Booking ID to cancel',
+  })
+  @IsNotEmpty()
+  @IsMongoId()
+  bookingId: string;
+
+  @ApiProperty({
+    example: BookingStatus.CANCELED,
+    enum: BookingStatus,
+    description: 'New status for booking',
+  })
+  @IsEnum(BookingStatus)
+  status: BookingStatus;
+}
