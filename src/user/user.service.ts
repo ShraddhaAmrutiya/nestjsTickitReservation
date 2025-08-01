@@ -26,7 +26,7 @@ export class UserService {
         $or: [{ email: user.email }, { userName: user.userName }],
       });
       if (existingUser) {
-        throw new ConflictException('Use another email');
+        throw new ConflictException('Use another email or userName');
       }
 
       const hashedPassword = await bcrypt.hash(user.password, 10);

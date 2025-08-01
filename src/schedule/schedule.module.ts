@@ -2,8 +2,8 @@ import { Module } from '@nestjs/common';
 import { ScheduleController } from './schedule.controller';
 import { ScheduleService } from './schedule.service';
 import { MongooseModule } from '@nestjs/mongoose';
-import { RoutSchema, Routs } from 'src/BusRoutes/Route.schema';
-import { BusSchema, bus } from 'src/bus/bus.schema';
+import { RoutSchema, Routs } from '../BusRoutes/Route.schema';
+import { BusSchema, bus } from '../bus/bus.schema';
 import { scheduleSchema, Schedule } from './schedule.schema';
 @Module({
   imports: [

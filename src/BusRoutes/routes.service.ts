@@ -8,7 +8,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Routs } from './Route.schema';
-import { stop } from 'src/stop/stop.schema';
+import { stop } from '../stop/stop.schema';
 import { Routdto, updateBusRoute } from './DTO/busroute.dto';
 
 @Injectable()

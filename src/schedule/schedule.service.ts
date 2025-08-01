@@ -11,7 +11,7 @@ import { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { Schedule } from './schedule.schema';
 import { Routs } from './../BusRoutes/Route.schema';
-import { bus } from 'src/bus/bus.schema';
+import { bus } from '../bus/bus.schema';
 
 @Injectable()
 export class ScheduleService {

@@ -26,7 +26,11 @@ export class bus {
     ],
     default: [],
   })
-  seats: { seatNumber: number; available: boolean }[];
+  seats: {
+    number: string;
+    seatNumber: any;
+    available: boolean;
+  }[];
 }
 
 export const BusSchema = SchemaFactory.createForClass(bus);

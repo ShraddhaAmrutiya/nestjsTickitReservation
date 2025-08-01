@@ -8,6 +8,8 @@ import { UserModule } from './user/user.module';
 import { BookingModule } from './booking/booking.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { StopModule } from './stop/stop.module';
+import { MailController } from './mail.controller';
+import { MailService } from './mail.microService';
 
 @Module({
   imports: [
@@ -19,7 +21,7 @@ import { StopModule } from './stop/stop.module';
     MongooseModule.forRoot(`mongodb://localhost:27017/ticket-reservation`),
     StopModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  controllers: [AppController, MailController],
+  providers: [AppService, MailService],
 })
 export class AppModule {}

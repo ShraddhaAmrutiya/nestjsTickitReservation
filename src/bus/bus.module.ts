@@ -3,7 +3,7 @@ import { BusController } from './bus.controller';
 import { BusService } from './bus.service';
 import { MongooseModule } from '@nestjs/mongoose';
 import { bus, BusSchema } from './bus.schema';
-import { Schedule, scheduleSchema } from 'src/schedule/schedule.schema';
+import { Schedule, scheduleSchema } from '../schedule/schedule.schema';
 @Module({
   imports: [
     MongooseModule.forFeature([

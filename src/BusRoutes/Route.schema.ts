@@ -1,5 +1,5 @@
 import { Schema, Prop, SchemaFactory } from '@nestjs/mongoose';
-import { stop } from 'src/stop/stop.schema';
+import { stop } from '../stop/stop.schema';
 import { Types } from 'mongoose';
 
 @Schema()

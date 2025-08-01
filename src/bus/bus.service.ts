@@ -10,7 +10,7 @@ import { Model } from 'mongoose';
 import { bus } from './bus.schema';
 import { InjectModel } from '@nestjs/mongoose';
 import { BusSummary } from './DTO/bus.dto';
-import { Schedule } from 'src/schedule/schedule.schema';
+import { Schedule } from '../schedule/schedule.schema';
 @Injectable()
 export class BusService {
   constructor(
