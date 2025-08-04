@@ -1,10 +1,18 @@
 import {
   Injectable,
+  Logger,
   InternalServerErrorException,
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
-import { ScheduleDto, UpdateScheduleDto } from './DTO/schedule.dto';
+import { Cron, CronExpression } from '@nestjs/schedule';
+
+import {
+  // RecurrenceType,
+  ScheduleDto,
+  RecurrenceType,
+  UpdateScheduleDto,
+} from './DTO/schedule.dto';
 // import { Routdto } from 'src/BusRoutes/DTO/busroute.dto';
 // import { createBusDto } from 'src/bus/DTO/bus.dto';
 import { Model } from 'mongoose';
@@ -20,41 +28,90 @@ export class ScheduleService {
     @InjectModel(Routs.name) private routsModel: Model<Routs>,
     @InjectModel(bus.name) private busModel: Model<bus>,
   ) {}
+
+  private getISTTime(date: Date = new Date()): Date {
+    const offset = 5.5 * 60 * 60 * 1000;
+    return new Date(date.getTime() + offset);
+  }
+
   async create(schedule: ScheduleDto) {
     try {
       const busExists = await this.busModel.findById(schedule.busId);
       if (!busExists) {
         throw new NotFoundException(`Bus with ID ${schedule.busId} not found`);
       }
+
       const routExists = await this.routsModel.findById(schedule.routId);
       if (!routExists) {
         throw new NotFoundException(
-          `Bus route with ID ${schedule.busId} not found`,
+          `Route with ID ${schedule.routId} not found`,
         );
       }
 
-      const existingSchedule = await this.scheduleModel.findOne({
-        busId: schedule.busId,
-        routId: schedule.routId,
-        depatureTime: schedule.departureTime,
-      });
-      if (existingSchedule) {
+      const istNow = this.getISTTime();
+      const threeHoursLaterIST = new Date(
+        istNow.getTime() + 3 * 60 * 60 * 1000,
+      );
+      const baseDeparture = this.getISTTime(new Date(schedule.departureTime));
+
+      if (baseDeparture < threeHoursLaterIST) {
         throw new ConflictException(
-          'Schedule already exists for this bus and route at the given time',
+          'Departure time must be at least 3 hours from now (IST)',
         );
       }
 
-      const newSchedule = new this.scheduleModel(schedule);
-      return await newSchedule.save();
-    } catch (error) {
-      console.log(error);
+      const nowUTC = new Date();
+      await this.scheduleModel.deleteMany({ departureTime: { $lt: nowUTC } });
 
-      if (error instanceof NotFoundException) {
-        throw error;
+      // const recurrence = schedule.recurrence ?? RecurrenceType.NONE;
+      // const maxOccurrences = 7;
+      const recurrenceSchedules: ScheduleDto[] = [];
+
+      if (schedule.recurrence && schedule.recurrence !== RecurrenceType.NONE) {
+        const maxOccurrences = 6;
+
+        for (let i = 0; i < maxOccurrences; i++) {
+          const newDep = new Date(baseDeparture);
+          const newArr = new Date(schedule.arrivalTime);
+
+          if (schedule.recurrence === RecurrenceType.DAILY) {
+            newDep.setDate(baseDeparture.getDate() + i);
+            newArr.setDate(newArr.getDate() + i);
+          } else if (schedule.recurrence === RecurrenceType.WEEKLY) {
+            newDep.setDate(baseDeparture.getDate() + i * 7);
+            newArr.setDate(newArr.getDate() + i * 7);
+          }
+
+          if (newDep < threeHoursLaterIST) continue;
+
+          recurrenceSchedules.push({
+            ...schedule,
+            departureTime: newDep.toISOString(),
+            arrivalTime: newArr.toISOString(),
+          });
+        }
+      } else {
+        // Only one-time schedule (non-recurring)
+        recurrenceSchedules.push({
+          ...schedule,
+          departureTime: baseDeparture.toISOString(),
+          arrivalTime: new Date(schedule.arrivalTime).toISOString(),
+        });
       }
-      if (error instanceof ConflictException) {
+
+      const savedSchedules =
+        await this.scheduleModel.insertMany(recurrenceSchedules);
+      return {
+        message: 'Schedules created successfully',
+        schedules: savedSchedules,
+      };
+    } catch (error) {
+      console.error(error);
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ConflictException
+      )
         throw error;
-      }
       throw new InternalServerErrorException('Failed to create schedule');
     }
   }
@@ -156,5 +213,35 @@ export class ScheduleService {
       }
       throw new InternalServerErrorException('Failed to delete schedule');
     }
+  }
+
+  private readonly logger = new Logger(ScheduleService.name);
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async deleteExpiredSchedules() {
+    const nowIST = new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000); // Convert to IST
+    // const nowUTC = new Date(); // For logging
+
+    const expiredSchedules = await this.scheduleModel.find({
+      departureTime: { $lt: nowIST },
+    });
+
+    if (expiredSchedules.length === 0) {
+      this.logger.log(`Current IST time: ${nowIST.toISOString()}`);
+      this.logger.log('No expired schedules found.');
+      return;
+    }
+
+    expiredSchedules.forEach((doc) => {
+      this.logger.warn(
+        `Deleting → ${doc._id.toString()} | ${doc.departureTime.toISOString()}`,
+      );
+    });
+
+    const result = await this.scheduleModel.deleteMany({
+      departureTime: { $lt: nowIST },
+    });
+
+    this.logger.log(`Deleted ${result.deletedCount} expired schedules.`);
   }
 }

@@ -20,6 +20,13 @@ export class Schedule {
 
   @Prop()
   arrivalTime: Date;
+
+  @Prop({
+    type: String,
+    enum: ['none', 'daily', 'weekly', 'twice_a_week'],
+    default: 'none',
+  })
+  recurrence: string;
 }
 
 export const scheduleSchema = SchemaFactory.createForClass(Schedule);
