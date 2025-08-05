@@ -63,41 +63,13 @@ export class ScheduleService {
       const nowUTC = new Date();
       await this.scheduleModel.deleteMany({ departureTime: { $lt: nowUTC } });
 
-      // const recurrence = schedule.recurrence ?? RecurrenceType.NONE;
-      // const maxOccurrences = 7;
       const recurrenceSchedules: ScheduleDto[] = [];
 
-      if (schedule.recurrence && schedule.recurrence !== RecurrenceType.NONE) {
-        const maxOccurrences = 6;
-
-        for (let i = 0; i < maxOccurrences; i++) {
-          const newDep = new Date(baseDeparture);
-          const newArr = new Date(schedule.arrivalTime);
-
-          if (schedule.recurrence === RecurrenceType.DAILY) {
-            newDep.setDate(baseDeparture.getDate() + i);
-            newArr.setDate(newArr.getDate() + i);
-          } else if (schedule.recurrence === RecurrenceType.WEEKLY) {
-            newDep.setDate(baseDeparture.getDate() + i * 7);
-            newArr.setDate(newArr.getDate() + i * 7);
-          }
-
-          if (newDep < threeHoursLaterIST) continue;
-
-          recurrenceSchedules.push({
-            ...schedule,
-            departureTime: newDep.toISOString(),
-            arrivalTime: newArr.toISOString(),
-          });
-        }
-      } else {
-        // Only one-time schedule (non-recurring)
-        recurrenceSchedules.push({
-          ...schedule,
-          departureTime: baseDeparture.toISOString(),
-          arrivalTime: new Date(schedule.arrivalTime).toISOString(),
-        });
-      }
+      recurrenceSchedules.push({
+        ...schedule,
+        departureTime: baseDeparture.toISOString(),
+        arrivalTime: new Date(schedule.arrivalTime).toISOString(),
+      });
 
       const savedSchedules =
         await this.scheduleModel.insertMany(recurrenceSchedules);
@@ -219,11 +191,11 @@ export class ScheduleService {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async deleteExpiredSchedules() {
-    const nowIST = new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000); // Convert to IST
-    // const nowUTC = new Date(); // For logging
+    const nowIST = new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000);
 
     const expiredSchedules = await this.scheduleModel.find({
       departureTime: { $lt: nowIST },
+      recurrence: { $exists: false },
     });
 
     if (expiredSchedules.length === 0) {
@@ -240,8 +212,72 @@ export class ScheduleService {
 
     const result = await this.scheduleModel.deleteMany({
       departureTime: { $lt: nowIST },
+      recurrence: { $exists: false },
     });
 
     this.logger.log(`Deleted ${result.deletedCount} expired schedules.`);
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async rescheduleRecurringSchedules() {
+    const now = new Date();
+
+    const recurringSchedules = await this.scheduleModel.find({
+      recurrence: { $in: [RecurrenceType.DAILY, RecurrenceType.WEEKLY] },
+    });
+
+    for (const schedule of recurringSchedules) {
+      const futureSchedules = await this.scheduleModel.countDocuments({
+        busId: schedule.busId,
+        routId: schedule.routId,
+        recurrence: schedule.recurrence,
+        departureTime: { $gt: now },
+      });
+
+      const required = 7 - futureSchedules;
+      if (required <= 0) continue;
+
+      let lastDeparture = new Date(schedule.departureTime);
+      let lastArrival = new Date(schedule.arrivalTime);
+
+      for (let i = 0; i < required; i++) {
+        const nextDeparture = new Date(lastDeparture);
+        const nextArrival = new Date(lastArrival);
+
+        if ((schedule.recurrence as RecurrenceType) === RecurrenceType.DAILY) {
+          nextDeparture.setDate(nextDeparture.getDate() + 1);
+          nextArrival.setDate(nextArrival.getDate() + 1);
+          if (
+            (schedule.recurrence as RecurrenceType) === RecurrenceType.WEEKLY
+          ) {
+            nextDeparture.setDate(nextDeparture.getDate() + 7);
+            nextArrival.setDate(nextArrival.getDate() + 7);
+          }
+
+          const existing = await this.scheduleModel.findOne({
+            departureTime: nextDeparture,
+            busId: schedule.busId,
+            routId: schedule.routId,
+          });
+          if (existing) continue;
+
+          const newSchedule = new this.scheduleModel({
+            ...schedule.toObject(),
+            _id: undefined,
+            departureTime: nextDeparture,
+            arrivalTime: nextArrival,
+          });
+
+          await newSchedule.save();
+
+          this.logger.log(
+            `Rescheduled [${schedule.recurrence}] → ${schedule._id.toString()} as → ${newSchedule._id.toString()}`,
+          );
+
+          lastDeparture = new Date(nextDeparture);
+          lastArrival = new Date(nextArrival);
+        }
+      }
+    }
   }
 }
