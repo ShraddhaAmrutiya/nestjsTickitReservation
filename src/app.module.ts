@@ -39,6 +39,7 @@ import { StopModule } from './stop/stop.module';
 import { MailController } from './mail.controller';
 import { MailService } from './mail.microService';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ScheduleSeatModule } from './schedule-seat/schedule-seat.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     UserModule,
     BookingModule,
     StopModule,
+    ScheduleSeatModule,
   ],
   controllers: [AppController, MailController],
   providers: [AppService, MailService],

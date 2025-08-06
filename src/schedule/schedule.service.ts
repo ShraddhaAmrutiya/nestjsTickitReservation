@@ -13,20 +13,20 @@ import {
   RecurrenceType,
   UpdateScheduleDto,
 } from './DTO/schedule.dto';
-// import { Routdto } from 'src/BusRoutes/DTO/busroute.dto';
-// import { createBusDto } from 'src/bus/DTO/bus.dto';
 import { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { Schedule } from './schedule.schema';
+import { ScheduleSeat } from '../schedule-seat/schedule-seat.schema';
 import { Routs } from './../BusRoutes/Route.schema';
 import { bus } from '../bus/bus.schema';
-
 @Injectable()
 export class ScheduleService {
   constructor(
     @InjectModel(Schedule.name) private scheduleModel: Model<Schedule>,
     @InjectModel(Routs.name) private routsModel: Model<Routs>,
     @InjectModel(bus.name) private busModel: Model<bus>,
+    @InjectModel(ScheduleSeat.name)
+    private scheduleSeatModel: Model<ScheduleSeat>,
   ) {}
 
   private getISTTime(date: Date = new Date()): Date {
@@ -63,16 +63,40 @@ export class ScheduleService {
       const nowUTC = new Date();
       await this.scheduleModel.deleteMany({ departureTime: { $lt: nowUTC } });
 
-      const recurrenceSchedules: ScheduleDto[] = [];
+      const recurrenceSchedules: ScheduleDto[] = [
+        {
+          ...schedule,
+          departureTime: baseDeparture.toISOString(),
+          arrivalTime: new Date(schedule.arrivalTime).toISOString(),
+        },
+      ];
+
+      const savedSchedules =
+        await this.scheduleModel.insertMany(recurrenceSchedules);
+
+      for (const s of savedSchedules) {
+        const seats = Array.from({ length: busExists.totalSeats }, (_, i) => ({
+          seatNumber: `${busExists.busNumber}${busExists.busName.slice(0, 3)}-${i + 1}`,
+          available: true,
+          userId: null,
+        }));
+
+        const scheduleSeatDoc = new this.scheduleSeatModel({
+          scheduleId: s._id.toString(),
+          seats: seats,
+          totalSeats: busExists.totalSeats,
+          availableSeats: busExists.totalSeats,
+        });
+
+        await scheduleSeatDoc.save();
+      }
 
       recurrenceSchedules.push({
         ...schedule,
         departureTime: baseDeparture.toISOString(),
         arrivalTime: new Date(schedule.arrivalTime).toISOString(),
       });
-
-      const savedSchedules =
-        await this.scheduleModel.insertMany(recurrenceSchedules);
+      console.log('savedSchedules', savedSchedules);
       return {
         message: 'Schedules created successfully',
         schedules: savedSchedules,
@@ -189,33 +213,34 @@ export class ScheduleService {
 
   private readonly logger = new Logger(ScheduleService.name);
 
+  // @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT) // or EVERY_MINUTE for testing
   @Cron(CronExpression.EVERY_MINUTE)
   async deleteExpiredSchedules() {
-    const nowIST = new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000);
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     const expiredSchedules = await this.scheduleModel.find({
-      departureTime: { $lt: nowIST },
-      recurrence: { $exists: false },
+      departureTime: { $lt: sevenDaysAgo },
     });
-
     if (expiredSchedules.length === 0) {
-      this.logger.log(`Current IST time: ${nowIST.toISOString()}`);
       this.logger.log('No expired schedules found.');
       return;
     }
 
-    expiredSchedules.forEach((doc) => {
-      this.logger.warn(
-        `Deleting → ${doc._id.toString()} | ${doc.departureTime.toISOString()}`,
-      );
+    // Log and delete associated ScheduleSeats
+    const scheduleIds = expiredSchedules.map((s) => s._id);
+    await this.scheduleSeatModel.deleteMany({
+      scheduleId: { $in: scheduleIds },
     });
 
+    // Delete the schedules
     const result = await this.scheduleModel.deleteMany({
-      departureTime: { $lt: nowIST },
-      recurrence: { $exists: false },
+      _id: { $in: scheduleIds },
     });
 
-    this.logger.log(`Deleted ${result.deletedCount} expired schedules.`);
+    this.logger.log(
+      `Deleted ${result.deletedCount} expired schedules and related seats.`,
+    );
   }
 
   @Cron(CronExpression.EVERY_MINUTE)
@@ -240,6 +265,12 @@ export class ScheduleService {
       let lastDeparture = new Date(schedule.departureTime);
       let lastArrival = new Date(schedule.arrivalTime);
 
+      const busExists = await this.busModel.findById(schedule.busId);
+      if (!busExists) {
+        this.logger.warn(`Bus with ID ${schedule.busId.toString()} not found`);
+        continue;
+      }
+
       for (let i = 0; i < required; i++) {
         const nextDeparture = new Date(lastDeparture);
         const nextArrival = new Date(lastArrival);
@@ -247,36 +278,50 @@ export class ScheduleService {
         if ((schedule.recurrence as RecurrenceType) === RecurrenceType.DAILY) {
           nextDeparture.setDate(nextDeparture.getDate() + 1);
           nextArrival.setDate(nextArrival.getDate() + 1);
-          if (
-            (schedule.recurrence as RecurrenceType) === RecurrenceType.WEEKLY
-          ) {
-            nextDeparture.setDate(nextDeparture.getDate() + 7);
-            nextArrival.setDate(nextArrival.getDate() + 7);
-          }
-
-          const existing = await this.scheduleModel.findOne({
-            departureTime: nextDeparture,
-            busId: schedule.busId,
-            routId: schedule.routId,
-          });
-          if (existing) continue;
-
-          const newSchedule = new this.scheduleModel({
-            ...schedule.toObject(),
-            _id: undefined,
-            departureTime: nextDeparture,
-            arrivalTime: nextArrival,
-          });
-
-          await newSchedule.save();
-
-          this.logger.log(
-            `Rescheduled [${schedule.recurrence}] → ${schedule._id.toString()} as → ${newSchedule._id.toString()}`,
-          );
-
-          lastDeparture = new Date(nextDeparture);
-          lastArrival = new Date(nextArrival);
+        } else if (
+          (schedule.recurrence as RecurrenceType) === RecurrenceType.WEEKLY
+        ) {
+          nextDeparture.setDate(nextDeparture.getDate() + 7);
+          nextArrival.setDate(nextArrival.getDate() + 7);
         }
+
+        const existing = await this.scheduleModel.findOne({
+          departureTime: nextDeparture,
+          busId: schedule.busId,
+          routId: schedule.routId,
+        });
+        if (existing) continue;
+
+        const newSchedule = new this.scheduleModel({
+          ...schedule.toObject(),
+          _id: undefined,
+          departureTime: nextDeparture,
+          arrivalTime: nextArrival,
+        });
+
+        await newSchedule.save();
+
+        const seats = Array.from({ length: busExists.totalSeats }, (_, i) => ({
+          seatNumber: `${busExists.busNumber}${busExists.busName.slice(0, 3)}-${i + 1}`,
+          available: true,
+          userId: null,
+        }));
+
+        const scheduleSeatDoc = new this.scheduleSeatModel({
+          scheduleId: newSchedule._id.toString(),
+          seats: seats,
+          totalSeats: busExists.totalSeats,
+          availableSeats: busExists.totalSeats,
+        });
+
+        await scheduleSeatDoc.save();
+
+        this.logger.log(
+          `Rescheduled [${schedule.recurrence}] → ${schedule._id.toString()} as → ${newSchedule._id.toString()}`,
+        );
+
+        lastDeparture = new Date(nextDeparture);
+        lastArrival = new Date(nextArrival);
       }
     }
   }
