@@ -4,11 +4,11 @@ import {
   IsNumber,
   IsEnum,
   IsBoolean,
-  IsOptional,
+  // IsOptional,
 } from 'class-validator';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { ValidateNested } from 'class-validator';
+// import { Type } from 'class-transformer';
+// import { ValidateNested } from 'class-validator';
 export enum busType {
   SLEEPER = 'sleeper',
   VOLVO = 'volvo',
@@ -59,23 +59,21 @@ export class createBusDto {
   //   description: 'Array of seat objects (auto-generated)',
   //   required: false,
   // })
-  @IsOptional()
-  @ValidateNested({ each: true })
-  @Type(() => Seat)
-  seats?: Seat[];
+  // @IsOptional()
+  // @ValidateNested({ each: true })
+  // @Type(() => Seat)
+  // seats?: Seat[];
 
-  @IsOptional()
-  @IsNumber()
-  availableSeats?: number;
+  // @IsOptional()
+  // @IsNumber()
+  // availableSeats?: number;
 }
 
 export interface BusSummary {
-  busNumber: string;
+  busNumber: number;
   busName: string;
   busType: string;
   totalSeats: number;
-  availableSeats: number;
-  bookedSeats: number;
 }
 
 export class UpdateBusDto extends PartialType(createBusDto) {}

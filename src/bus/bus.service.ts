@@ -2,20 +2,23 @@ import {
   Injectable,
   NotFoundException,
   InternalServerErrorException,
-  //   UnauthorizedException,
+  BadRequestException,
   ConflictException,
 } from '@nestjs/common';
 import { createBusDto } from './DTO/bus.dto';
 import { Model } from 'mongoose';
 import { bus } from './bus.schema';
 import { InjectModel } from '@nestjs/mongoose';
-import { BusSummary } from './DTO/bus.dto';
+// import { BusSummary } from './DTO/bus.dto';
 import { Schedule } from '../schedule/schedule.schema';
+import { ScheduleSeat } from 'src/schedule-seat/entities/schedule-seat.entity';
 @Injectable()
 export class BusService {
   constructor(
     @InjectModel(bus.name) private busModel: Model<bus>,
     @InjectModel(Schedule.name) private scheduleModel: Model<Schedule>,
+    @InjectModel(ScheduleSeat.name)
+    private ScheduleSeatModel: Model<ScheduleSeat>,
   ) {}
   async create(bus: createBusDto) {
     try {
@@ -27,14 +30,8 @@ export class BusService {
         throw new ConflictException('This bus number is already taken');
       }
 
-      const seats = Array.from({ length: bus.totalSeats }, (_, i) => ({
-        seatNumber: `${bus.busNumber}${bus.busName.slice(0, 3)}-${i + 1}`,
-        available: true,
-      }));
-
       const newBus = new this.busModel({
         ...bus,
-        seats,
         availabeSeats: bus.totalSeats,
       });
       return await newBus.save();
@@ -48,30 +45,7 @@ export class BusService {
 
   async findAll() {
     try {
-      const allBus = await this.busModel.aggregate<BusSummary>([
-        {
-          $project: {
-            busNumber: 1,
-            busName: 1,
-            busType: 1,
-            totalSeats: { $size: '$seats' },
-            availabeSeats: {
-              $size: {
-                $filter: {
-                  input: '$seats',
-                  as: 'seat',
-                  cond: { $eq: ['$$seat.available', true] },
-                },
-              },
-            },
-          },
-        },
-        {
-          $addFields: {
-            bookedSeats: { $subtract: ['$totalSeats', '$availabeSeats'] },
-          },
-        },
-      ]);
+      const allBus = await this.busModel.find().exec();
 
       if (!allBus || allBus.length === 0) {
         throw new NotFoundException('No bus available');
@@ -79,6 +53,7 @@ export class BusService {
 
       return allBus;
     } catch (error) {
+      console.log(error);
       if (error instanceof NotFoundException) throw error;
       throw new InternalServerErrorException('Failed to fetch all Buses.');
     }
@@ -102,14 +77,28 @@ export class BusService {
       if (!bus) {
         throw new NotFoundException('Bus not found');
       }
+
+      // Step 1: Find all schedules for this bus
+      const schedules = await this.scheduleModel.find({ busId: id }).exec();
+
+      // Step 2: Extract schedule IDs
+      const scheduleIds = schedules.map((schedule) => schedule._id);
+
+      // Step 3: Delete all matching ScheduleSeat entries
+      await this.ScheduleSeatModel.deleteMany({
+        scheduleId: { $in: scheduleIds },
+      }).exec();
+
+      // Step 4: Delete all related schedules
       await this.scheduleModel.deleteMany({ busId: id }).exec();
 
-      return { message: `bus deleted successfully`, bus: bus.busName };
+      return { message: `Bus deleted successfully`, bus: bus.busName };
     } catch (error: any) {
       if (error instanceof NotFoundException) throw error;
       throw new InternalServerErrorException('Failed to delete bus');
     }
   }
+
   async update(id: string, bus: Partial<createBusDto>) {
     try {
       const existingBus = await this.busModel.findById(id).exec();
@@ -117,21 +106,37 @@ export class BusService {
       if (!existingBus) {
         throw new NotFoundException('Bus not found');
       }
-
       if (
         bus.totalSeats !== undefined &&
         bus.totalSeats !== existingBus.totalSeats
       ) {
-        bus.seats = Array.from({ length: bus.totalSeats }, (_, i) => ({
-          seatNumber: `${existingBus.busNumber}${existingBus.busName.slice(0, 3)}-${i + 1}`,
-          available: true,
-        }));
+        throw new BadRequestException('Changing totalSeats is not allowed');
+      }
+      // Check if busNumber is being changed and validate uniqueness
+      if (
+        bus.busNumber !== undefined &&
+        bus.busNumber !== existingBus.busNumber
+      ) {
+        const duplicateBus = await this.busModel.findOne({
+          busNumber: bus.busNumber,
+          _id: { $ne: id }, // Exclude current bus
+        });
+
+        if (duplicateBus) {
+          throw new ConflictException(
+            'This bus number is already taken by another bus',
+          );
+        }
       }
 
+      // Only allow updates to busName and busNumber
+      const updateData: Partial<createBusDto> = {};
+      if (bus.busName !== undefined) updateData.busName = bus.busName;
+      if (bus.busNumber !== undefined) updateData.busNumber = bus.busNumber;
+
+      // Update the bus
       const updatedBus = await this.busModel
-        .findByIdAndUpdate(id, bus, {
-          new: true,
-        })
+        .findByIdAndUpdate(id, updateData, { new: true })
         .exec();
 
       return {
@@ -139,8 +144,12 @@ export class BusService {
         bus: updatedBus,
       };
     } catch (error) {
-      console.log(error);
-      if (error instanceof NotFoundException) throw error;
+      console.error(error);
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ConflictException
+      )
+        throw error;
       throw new InternalServerErrorException('Failed to update bus.');
     }
   }

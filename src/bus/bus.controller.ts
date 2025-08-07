@@ -5,13 +5,13 @@ import {
   Get,
   Param,
   Delete,
-  Patch,
+  // Patch,
 } from '@nestjs/common';
 import { BusService } from './bus.service';
-import { createBusDto, UpdateBusDto } from './DTO/bus.dto';
+import { createBusDto /*, UpdateBusDto */ } from './DTO/bus.dto';
 import { UsePipes, ValidationPipe } from '@nestjs/common';
 import { BusSummary } from './DTO/bus.dto';
-import { ApiBody } from '@nestjs/swagger';
+// import { ApiBody } from '@nestjs/swagger';
 @Controller('bus')
 export class BusController {
   constructor(private readonly busService: BusService) {}
@@ -32,9 +32,9 @@ export class BusController {
   delete(@Param('id') id: string) {
     return this.busService.delete(id);
   }
-  @Patch(':id')
-  @ApiBody({ type: UpdateBusDto })
-  update(@Param('id') id: string, @Body() bus: UpdateBusDto) {
-    return this.busService.update(id, bus);
-  }
+  // @Patch(':id')
+  // @ApiBody({ type: UpdateBusDto })
+  // update(@Param('id') id: string, @Body() bus: UpdateBusDto) {
+  //   return this.busService.update(id, bus);
+  // }
 }

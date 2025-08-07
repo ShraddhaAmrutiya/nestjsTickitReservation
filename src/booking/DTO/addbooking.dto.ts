@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
-  IsDateString,
+  // IsDateString,
   IsEnum,
   IsMongoId,
   IsNotEmpty,
@@ -22,10 +22,10 @@ export class BookingDto {
   @IsNotEmpty()
   scheduleId: string;
 
-  @ApiProperty({ example: '2025-07-01T12:00:00.000Z' })
-  @IsDateString()
-  @IsNotEmpty()
-  bookingDate: string;
+  // @ApiProperty({ example: '2025-07-01T12:00:00.000Z' })
+  // @IsDateString()
+  // @IsNotEmpty()
+  // bookingDate?: string;
 
   @ApiProperty({ example: BookingStatus.BOOKED, enum: BookingStatus })
   @IsEnum(BookingStatus)

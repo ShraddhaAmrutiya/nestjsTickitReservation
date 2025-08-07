@@ -34,6 +34,7 @@
 //   providers: [BookingService],
 // })
 // export class BookingModule {}
+
 import { Module } from '@nestjs/common';
 import { BookingController } from './booking.controller';
 import { BookingService } from './booking.service';
@@ -44,11 +45,16 @@ import { bus, BusSchema } from '../bus/bus.schema';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { BookingGroup, BookingSchema } from './booking.schema';
 import { ClientsModule, Transport } from '@nestjs/microservices';
+import {
+  ScheduleSeat,
+  ScheduleSeatSchema,
+} from '../schedule-seat/schedule-seat.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: Schedule.name, schema: scheduleSchema },
+      { name: ScheduleSeat.name, schema: ScheduleSeatSchema },
       { name: User.name, schema: UserSchema },
       { name: bus.name, schema: BusSchema },
       { name: 'booking', schema: BookingSchema },

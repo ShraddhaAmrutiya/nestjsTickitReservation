@@ -116,20 +116,42 @@ export class ScheduleService {
     try {
       const schedule = await this.scheduleModel
         .findById(id)
-        .find()
         .populate('busId')
         .populate('routId')
         .exec();
 
       if (!schedule) {
-        throw new NotFoundException('No schedule found ');
+        throw new NotFoundException('No schedule found');
       }
-      return schedule;
+
+      const scheduleSeat = await this.scheduleSeatModel
+        .findOne({
+          scheduleId: id,
+        })
+        .exec();
+
+      const trimmedSeats =
+        scheduleSeat?.seats.map((seat) => ({
+          seatNumber: seat.seatNumber,
+          available: seat.available,
+        })) || [];
+
+      return {
+        ...schedule.toObject(),
+        scheduleSeat: {
+          scheduleId: scheduleSeat?.scheduleId,
+          totalSeats: scheduleSeat?.totalSeats,
+          availableSeats: scheduleSeat?.availableSeats,
+          seats: trimmedSeats,
+        },
+      };
     } catch (error) {
+      console.error(error);
       if (error instanceof NotFoundException) throw error;
       throw new InternalServerErrorException('Failed to fetch schedule.');
     }
   }
+
   async findAll() {
     try {
       const schedule = await this.scheduleModel

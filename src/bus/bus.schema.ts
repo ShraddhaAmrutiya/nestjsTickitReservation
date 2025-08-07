@@ -15,17 +15,17 @@ export class bus {
   busType: string;
   @Prop()
   totalSeats: number;
-  @Prop()
-  availabeSeats: number;
-  @Prop({
-    type: [
-      {
-        seatNumber: { type: String, required: true },
-        available: { type: Boolean, default: true },
-      },
-    ],
-    default: [],
-  })
+  // @Prop()
+  // availabeSeats: number;
+  // @Prop({
+  //   type: [
+  //     {
+  //       seatNumber: { type: String, required: true },
+  //       available: { type: Boolean, default: true },
+  //     },
+  //   ],
+  //   default: [],
+  // })
   seats: {
     number: string;
     seatNumber: any;

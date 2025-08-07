@@ -14,6 +14,7 @@ import { bus } from '../bus/bus.schema';
 import { User } from '../user/User.schema';
 import { lastValueFrom } from 'rxjs';
 import { ClientProxy } from '@nestjs/microservices';
+import { ScheduleSeat } from 'src/schedule-seat/schedule-seat.schema';
 
 @Injectable()
 export class BookingService {
@@ -21,32 +22,38 @@ export class BookingService {
     @InjectModel('Schedule') private scheduleModel: Model<Schedule>,
     @InjectModel('User') private userModel: Model<User>,
     @InjectModel('bus') private busModel: Model<bus>,
+    @InjectModel('ScheduleSeat') private ScheduleSeatModel: Model<ScheduleSeat>,
     @InjectModel('booking') private bookingModel: Model<BookingGroup>,
     @Inject('MAIL_SERVICE') private mailClient: ClientProxy,
   ) {}
 
   async create(bookingDto: BookingDto): Promise<any> {
     const { scheduleId, seatNumber, userId } = bookingDto;
+
     try {
-      //  Validate Schedule
       const schedule = await this.scheduleModel.findById(scheduleId);
       if (!schedule) throw new NotFoundException('Schedule not found');
 
-      //  Validate Bus
       const bus = await this.busModel.findById(schedule.busId);
       if (!bus) throw new NotFoundException('Bus not found');
 
-      //  Check Seat Availability
-      const seat = bus.seats.find((s) => s.seatNumber === seatNumber);
+      const scheduleSeat = await this.ScheduleSeatModel.findOne({
+        scheduleId: scheduleId,
+      });
+
+      if (!scheduleSeat) throw new NotFoundException('ScheduleSeat not found');
+
+      const seat = scheduleSeat.seats.find((s) => s.seatNumber === seatNumber);
       if (!seat) throw new BadRequestException('Seat not found');
       if (!seat.available) throw new BadRequestException('Seat already booked');
 
-      //  Reserve Seat
+      // Reserve seat
       seat.available = false;
-      bus.availabeSeats = (bus.availabeSeats || 0) - 1;
-      await bus.save();
+      seat.userId = userId;
+      scheduleSeat.availableSeats -= 1;
+      await scheduleSeat.save();
 
-      // Create New Booking Item
+      // Create booking item
       const bookingItem = {
         scheduleId: new Types.ObjectId(scheduleId),
         seatNumber,
@@ -54,7 +61,7 @@ export class BookingService {
         status: BookingStatus.BOOKED,
       };
 
-      // Find Existing Booking Document or Create New
+      // Create or update booking group
       const objectUserId = new Types.ObjectId(userId);
       let userBooking = await this.bookingModel.findOne({
         userId: objectUserId,
@@ -64,14 +71,14 @@ export class BookingService {
         userBooking.bookings.push(bookingItem);
       } else {
         userBooking = new this.bookingModel({
-          userId: new Types.ObjectId(userId),
+          userId: objectUserId,
           bookings: [bookingItem],
         });
       }
 
       const saved = await userBooking.save();
 
-      //  Send Email
+      // Send mail
       const user = await this.userModel.findById(userId);
       if (user?.email) {
         await lastValueFrom(
@@ -86,15 +93,17 @@ export class BookingService {
         );
       }
 
-      //  Return Only New Booking Info
       return {
         userId: saved.userId,
         booking: saved.bookings[saved.bookings.length - 1],
       };
     } catch (error) {
-      if (error instanceof NotFoundException || BadRequestException)
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      )
         throw error;
-      throw new InternalServerErrorException('Failed to fetch all Buses.');
+      throw new InternalServerErrorException('Failed to create booking.');
     }
   }
 
@@ -132,6 +141,7 @@ export class BookingService {
       const bookingGroup = await this.bookingModel.findOne({
         userId: new Types.ObjectId(userId),
       });
+
       if (!bookingGroup) {
         throw new NotFoundException('Booking group not found');
       }
@@ -154,25 +164,37 @@ export class BookingService {
           throw new NotFoundException('Schedule not found for booking');
         }
 
-        const bus = await this.busModel.findById(schedule.busId);
-        if (!bus) {
-          throw new NotFoundException('Bus not found for schedule');
+        const scheduleSeat = await this.ScheduleSeatModel.findOne({
+          scheduleId: booking.scheduleId.toString(),
+        });
+
+        if (!scheduleSeat) {
+          throw new NotFoundException('ScheduleSeat not found for schedule');
         }
 
-        const seat = bus.seats.find((s) => s.seatNumber === booking.seatNumber);
+        const seat = scheduleSeat.seats.find(
+          (s) => s.seatNumber === booking.seatNumber,
+        );
+
         if (!seat) {
-          throw new NotFoundException('Seat not found on bus');
+          throw new NotFoundException('Seat not found in ScheduleSeat');
         }
 
         seat.available = true;
-        bus.availabeSeats = (bus.availabeSeats || 0) + 1;
-        await bus.save();
+        seat.userId = null;
+        scheduleSeat.availableSeats += 1;
+
+        await scheduleSeat.save();
       }
 
+      //  Update status in booking group
       booking.status = status;
       await bookingGroup.save();
 
-      return { message: `Booking ${status} successfully`, booking };
+      return {
+        message: `Booking ${status} successfully`,
+        booking,
+      };
     } catch (error) {
       if (
         error instanceof NotFoundException ||
@@ -180,6 +202,7 @@ export class BookingService {
       ) {
         throw error;
       }
+
       throw new InternalServerErrorException('Failed to update booking status');
     }
   }
