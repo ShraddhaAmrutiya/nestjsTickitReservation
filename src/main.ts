@@ -7,6 +7,12 @@ import { Transport } from '@nestjs/microservices';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  app.enableCors({
+    origin: 'http://localhost:3000',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
+
   // Global validation pipe
   app.useGlobalPipes(
     new ValidationPipe({
@@ -40,7 +46,7 @@ async function bootstrap() {
   await app.startAllMicroservices();
   console.log(' Mail microservice is listening...');
 
-  await app.listen(3000);
-  console.log(' HTTP server is running on http://localhost:3000');
+  await app.listen(4000);
+  console.log(' HTTP server is running on http://localhost:4000');
 }
 void bootstrap();
